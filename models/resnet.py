@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 
 class BasicBlock(nn.Module):
@@ -121,10 +122,22 @@ def ResNet152():
     return ResNet(Bottleneck, [3, 8, 36, 3])
 
 
-def test():
-    net = ResNet18()
-    y = net(torch.randn(1, 3, 32, 32))
-    print(y.size())
-
+class ResNetT(nn.Module):
+    def __init__(self, cfg="resnet50"):
+        super().__init__()
+        
+        if cfg == "resnet18":
+            self.base = torchvision.models.resnet18(num_classes=200)
+        elif cfg == "resnet34":
+            self.base = torchvision.models.resnet34(num_classes=200)
+        elif cfg == "resnet50":
+            self.base = torchvision.models.resnet50(num_classes=200)
+        else:
+            raise NotImplementedError()
+        
+        self.base.avgpool =  nn.AdaptiveAvgPool2d((1,1))
+        #self.base.fc.apply(weight_init_kaiming)
+    def forward(self, x):
+        return self.base(x)
 
 

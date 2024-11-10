@@ -6,8 +6,13 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torchvision import datasets, transforms
+from torchvision.datasets import ImageFolder
 import os
-from models import ResNet18
+
+import torchvision
+from models.resnet import ResNet18,ResNet50,ResNetT
+from models.mobilenetv2 import MobileNetV2
+from models.senet import SENet18
 import argparse
 
 # 初始化分布式环境
@@ -50,7 +55,7 @@ def train(rank, world_size,model):
     
     cleanup()
 
-def loadData(args):
+def loadDataAndModel(args):
     print('==> Preparing data..' + args.dataset)
     if args.dataset == 'tiny':
         mean = [0.4802, 0.4481, 0.3975]
@@ -130,8 +135,47 @@ def loadData(args):
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
         ])
+    # Dataset
+    print('==> Building model..')
+    if args.dataset == 'cifar10': #classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+        cls_outdim = 10
+        trainset = torchvision.datasets.CIFAR10(root='/home/caifei/Project/Datasets/cifar10', train=True, download=True, transform=transform_train)
+        testset = torchvision.datasets.CIFAR10(root='/home/caifei/Project/Datasets/cifar10', train=False, download=True, transform=transform_test)
+        wholedataset = torchvision.datasets.CIFAR10(root='/home/caifei/Project/Datasets/cifar10', train=True, download=True, transform=transform_test)
+    elif args.dataset == 'cifar100':
+        cls_outdim = 100
+        trainset = torchvision.datasets.CIFAR100(root='/home/caifei/Project/Datasets/cifar100', train=True, download=True, transform=transform_train)
+        testset = torchvision.datasets.CIFAR100(root='/home/caifei/Project/Datasets/cifar100', train=False, download=True, transform=transform_test)
+        wholedataset = torchvision.datasets.CIFAR100(root='/home/caifei/Project/Datasets/cifar100', train=True, download=True, transform=transform_test)
+    elif args.dataset == 'tiny':
+        cls_outdim = 200
+        train_set_path = os.path.join('/home/caifei/Project/Datasets/tiny-imagenet-200', 'train')
+        test_set_path = os.path.join('/home/caifei/Project/Datasets/tiny-imagenet-200', 'val')
+        trainset = ImageFolder(root=train_set_path, transform=transform_train)
+        testset = ImageFolder(root=test_set_path, transform=transform_test)
+        wholedataset = ImageFolder(root=train_set_path, transform=transform_train)
 
-
+    testloader = torch.utils.data.DataLoader(
+        testset, batch_size=100, shuffle=False, num_workers=1)
+    wholeloader = torch.utils.data.DataLoader(
+        wholedataset, batch_size=1, shuffle=False, num_workers=1)
+    #Model
+    cls_indim = -10
+    if args.model == 'resnet18':
+        net = ResNet18(cls_indim, cls_outdim)
+        if args.dataset == 'tiny':
+            net = ResNetT('resnet18') #torchvision.models.resnet18(num_classes=200)
+    elif args.model == 'resnet50':
+        net = ResNet50(cls_indim, cls_outdim)
+        if args.dataset == 'tiny':
+            net = ResNetT('resnet50') #torchvision.models.resnet50(num_classes=200)
+    elif args.model == 'senet50':
+        net = SENet18(cls_indim, cls_outdim)
+    elif args.model == 'mobilenetv2':
+        net = MobileNetV2(cls_indim, cls_outdim)
+    else:
+        print('no valid network specified')
+    return trainset,testloader,wholeloader,net
 # 主函数
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
